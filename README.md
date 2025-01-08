@@ -6,20 +6,24 @@ This project implements a highly scalable, secure, and fault-tolerant three-tier
 ---
 
 ## Table of Contents
-1. [Setup](#setup)
-2. [Networking and Security](#networking-and-security)
-3. [Database Deployment](#database-deployment)
-4. [App Tier Setup](#app-tier-setup)
-5. [App Tier Deployment](#app-tier-deployment)
-6. [Web Tier Setup](#web-tier-setup)
-7. [Web Tier Deployment](#web-tier-deployment)
-8. [Architecture Diagram](#architecture-diagram)
+1. [Architecture Diagram](#architecture-diagram)
+2. [Setup](#setup)
+3. [Networking and Security](#networking-and-security)
+4. [Database Deployment](#database-deployment)
+5. [App Tier Setup](#app-tier-setup)
+6. [App Tier Deployment](#app-tier-deployment)
+7. [Web Tier Setup](#web-tier-setup)
+8. [Web Tier Deployment](#web-tier-deployment)
 9. [Testing Step: Verify Web Server Load Balancer](#testing-step-verify-web-server-load-balancer)
 10. [Troubleshooting Guide](#troubleshooting-guide)
 11. [Conclusion](#conclusion)
 
 ---
+## Architecture Diagram
 
+<img src="https://github.com/gitkailash/AWS-Three-Tier-Web-Architecture-Project/blob/master/web-tier/src/assets/3TierArch.png" alt="Architecture Diagram"/>
+
+---
 ## Setup
 ### Step 1: Clone Repository
 ```bash
@@ -434,7 +438,16 @@ curl localhost:80
    ```bash
    curl http://WebServer-LB-12345678.us-east-1.elb.amazonaws.com
    curl http://WebServer-LB-12345678.us-east-1.elb.amazonaws.com/health
-   ```  
+   ```
+---
+
+### Screenshots
+*Home Screen.* 
+![Home Screen](web-tier/src/assets/home-ss.png) 
+
+*Database Screen.* 
+![Database Screen](web-tier/src/assets/db-ss.png) 
+
 ---
 ## Troubleshooting Guide
 
