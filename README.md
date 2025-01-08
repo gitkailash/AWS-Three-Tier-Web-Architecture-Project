@@ -544,3 +544,16 @@ By following these troubleshooting steps, you should be able to resolve most iss
 ## Conclusion
 This README provides step-by-step guidance for deploying a secure, scalable, and reliable three-tier web architecture on AWS. Follow the instructions carefully to ensure a successful deployment.
 
+---
+
+## Notes  
+
+⚠️ **Important Reminder**:  
+"Because we all love the thrill of an unexpected AWS bill, don't forget to *not* delete your created services after testing. Who doesn't enjoy explaining a hefty cloud bill to their manager? But hey, if you're into that sort of thing, go ahead and leave it running. 😉" 
+
+---
+
+## License
+This project is licensed under the MIT License.
+
+
