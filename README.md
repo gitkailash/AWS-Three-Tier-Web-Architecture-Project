@@ -10,10 +10,13 @@ This project implements a highly scalable and secure three-tier web architecture
 2. [Networking and Security](#networking-and-security)
 3. [Database Deployment](#database-deployment)
 4. [App Tier Setup](#app-tier-setup)
-5. [Internal Load Balancer and Auto Scaling](#internal-load-balancer-and-auto-scaling)
+5. [App Tier Deployment](#app-tier-deployment)
 6. [Web Tier Setup](#web-tier-setup)
 7. [Web Tier Deployment](#web-tier-deployment)
 8. [Architecture Diagram](#architecture-diagram)
+9. [Testing Step: Verify Web Server Load Balancer](#testing-step-verify-web-server-load-balancer)
+10. [Troubleshooting Guide](#troubleshooting-guide)
+11. [Conclusion](#conclusion)
 
 ---
 
@@ -104,10 +107,10 @@ git clone https://github.com/aws-samples/aws-three-tier-web-architecture-worksho
   - **Subnet:** `private-app-subnet-AZ-1`
   - **Security Group:** `AppTier-SG`
 - **Advance Setting:**
-  - **IAM Role:** `EC2_S3_ReadOnly_SSM_Role`
+  - **IAM instance profile:** `EC2_S3_ReadOnly_SSM_Role`
 - **Lunch instance** 
 
-### Step 2: Connect to instance  (Session Manager)
+### Step 2: Connect to AppServer instance  (Session Manager)
 Instructions for Setting Up the Application
 ```bash
 # Switch to EC2 user
@@ -228,31 +231,61 @@ curl http://localhost:4000/transaction
 ```
 ---
 
-## Internal Load Balancer and Auto Scaling
+## App Tier Deployment
 ### Step 1: Create AMI of AppServer
   - Select AppServer Instance> Action> Image and templates> Create Image
 ### Step 2: Create Target Group
 - **Name:** `AppServerTG`
 - **Protocol:** HTTP (4000)
+- **VPC:** `Your VPC`
 - **Health Check Path:** `/health`
 
-### Step 3: Create Internal Load Balancer
+### Step 3: Create Internal Load Balancer(ALB)
 - **Name:** `AppServer-LB`
-- **Subnets:** Private App Subnets
+- **Schema:** `Internal`
+- **VPC:** `Your VPC`
+- **Subnets:** Both Private App Subnets
 - **Security Group:** `Internal-LB-SG`
+- **TargetGroup:** `AppServerTG`
 
 ### Step 4: Launch Template
 - **Name:** `AppServer-LaunchTemplate`
-- **AMI:** AppServer AMI
+- **AMI:** `AppServer-AMI`
+- **Instance type:** `t2.micro`
 - **Security Group:** `AppTier-SG`
-- **IAM Role:** `EC2_S3_ReadOnly_SSM_Role`
+- **Advance Setting:**
+  - **IAM instance profile:** `EC2_S3_ReadOnly_SSM_Role`
 
 ### Step 5: Auto Scaling Group
 - **Name:** `AppTier-ASG`
+- **Launch template:** `AppServer-LaunchTemplate`
+- **VPC:** `Your VPC`
+- **Subnets:** Both Private App Subnets
+- **Select Attach to an existing load balancer:**
+  - Select Choose from your load balancer target groups:
+  - Select target groups: `AppServerTG | HTTP`
 - **Desired Capacity:** 2
 - **Min:** 2
 - **Max:** 2
-- **Load Balancer Target Group:** `AppServerTG`
+
+
+
+### Step 6: Configure Nginx and Upload Web-Tier Files
+
+1. **Edit the `nginx.config` File**  
+   - Open the `nginx.config` file in a text editor.
+   - Locate the section for proxy configuration and replace `[REPLACE-WITH-INTERNAL-LB-DNS]` with your internal load balancer's DNS name:
+     ```nginx
+     # Proxy for internal LB
+     location /api/ {
+         proxy_pass http://[REPLACE-WITH-INTERNAL-LB-DNS]:80/;
+     #Example
+         ##proxy_pass http://internal-lb-123456789.us-east-1.elb.amazonaws.com:80/;
+     }
+     ```
+   - Save the changes.
+
+2. **Upload the `web-tier` and `nginx.config` Files to the S3 Bucket**  
 
 ---
 
@@ -260,37 +293,254 @@ curl http://localhost:4000/transaction
 ### Step 1: Launch WebServer EC2 Instance
 - **AMI:** Amazon Linux
 - **Instance Type:** t2.micro
-- **Subnet:** Public Web Subnet (AZ-1)
-- **Security Group:** `WebTier-SG`
-- **IAM Role:** `EC2_S3_ReadOnly_SSM_Role`
+- **Edit Network Setting**:
+  - **VPC:** `Your VPC`
+  - **Subnet:** `public-web-subnet-AZ-1`
+  - **Security Group:** `WebTier-SG`
+- **Advance Setting:**
+  - **IAM instance profile:** `EC2_S3_ReadOnly_SSM_Role`
+- **Lunch instance** 
 
-### Step 2: Deploy Web Application
-1. Upload `web-tier` and `nginx.conf` to S3.
-2. Install and configure NGINX.
-3. Start the web application.
+### Step 2: Connect to WebServer instance  (Session Manager)
+Instructions for Setting Up the Web Application
+```bash
+# Switch to ec2-user
+sudo -su ec2-user
+
+# Check network connectivity
+ping 8.8.8.8
+
+# Install Node Version Manager (NVM)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+source ~/.nvm/nvm.sh
+
+# Install and use Node.js version 18
+nvm install 18
+nvm use 18
+
+# Verify NVM and Node.js installation
+nvm -v
+nvm use 18
+
+# Install PM2 globally
+npm install -g pm2
+
+# Navigate to the home directory
+cd ../../
+cd /home/ec2-user/
+pwd
+ls -rlt
+
+# Download the web-tier folder from the S3 bucket
+sudo aws s3 cp s3://aws-three-tier-web-architecture-workshop-2025/web-tier/ web-tier --recursive
+
+# Change directory to web-tier
+cd web-tier/
+
+# Set correct ownership for the web-tier folder
+sudo chown -R ec2-user:ec2-user /home/ec2-user/web-tier
+
+# Install dependencies and build the web-tier project
+npm install
+npm run build
+
+# Install Nginx
+sudo yum install nginx -y
+
+# Navigate to the Nginx configuration directory
+cd /etc/nginx/
+ls -lrt
+
+# Backup the existing Nginx configuration
+sudo cp nginx.conf nginx.conf_backup
+
+# Download the updated Nginx configuration from the S3 bucket
+sudo aws s3 cp s3://aws-three-tier-web-architecture-workshop-2025/nginx.conf .
+
+# Display the Nginx configuration to verify Load Balancer DNS
+cat nginx.conf
+# Ensure the Load Balancer DNS is correctly set
+
+# Restart and enable Nginx
+sudo service nginx restart
+sudo systemctl enable nginx
+sudo service nginx status
+
+# Set permissions for the build directory
+sudo chmod -R 755 /home/ec2-user/web-tier/build
+sudo chmod +x /home /home/ec2-user /home/ec2-user/web-tier
+
+# Change ownership to Nginx for the web-tier directory
+sudo chown -R ec2-user:nginx /home/ec2-user/web-tier
+
+# Restart and check the status of Nginx again
+sudo service nginx restart
+sudo service nginx status
+
+# Test application health and default endpoint
+curl localhost/health
+curl localhost:80
+
+```
 
 ---
 
 ## Web Tier Deployment
 ### Step 1: Create AMI of WebServer
-
+  - Select WebServer Instance> Action> Image and templates> Create Image
 ### Step 2: Create Target Group
 - **Name:** `WebServerTG`
 - **Protocol:** HTTP (80)
+- **VPC:** `Your VPC`
 - **Health Check Path:** `/health`
 
-### Step 3: Create Internet-Facing Load Balancer
+### Step 3: Create Internet-facing Load Balancer(ALB)
 - **Name:** `WebServer-LB`
-- **Subnets:** Public Web Subnets
+- **Schema:** `Internet-facing`
+- **VPC:** `Your VPC`
+- **Subnets:** Both Public Web Subnets
 - **Security Group:** `InternetFacing-lb-sg`
+- **TargetGroup:** `WebServerTG`
+
+### Step 4: Launch Template
+- **Name:** `WebServer-LaunchTemplate`
+- **AMI:** `WebServer-AMI`
+- **Instance type:** `t2.micro`
+- **Security Group:** `WebTier-SG`
+- **Advance Setting:**
+  - **IAM instance profile:** `EC2_S3_ReadOnly_SSM_Role`
+
+### Step 5: Auto Scaling Group
+- **Name:** `WebTier-ASG`
+- **Launch template:** `WebServer-LaunchTemplate`
+- **VPC:** `Your VPC`
+- **Subnets:** Both Public Web Subnets
+- **Select Attach to an existing load balancer:**
+  - Select Choose from your load balancer target groups:
+  - Select target groups: `WebServerTG | HTTP`
+- **Desired Capacity:** 2
+- **Min:** 2
+- **Max:** 2
+---
+
+Here are the troubleshooting steps for the entire process, written in a README format. You can add this section after your setup instructions.
+
+---
+Here’s how you can write the testing step in a clear and concise manner:  
+
+### Testing Step: Verify Web Server Load Balancer  
+
+1. Once the **WebTier-ASG** is created, locate the **Load Balancer DNS** from the AWS Management Console:  
+   - Navigate to the **EC2 Dashboard** > **Load Balancers**.  
+   - Find the **Load Balancer** associated with the WebTier-ASG.  
+   - Copy the DNS name (e.g., `WebServer-LB-12345678.us-east-1.elb.amazonaws.com`).  
+
+2. Paste the DNS name into your browser's address bar or use the `curl` command to test connectivity:  
+   ```bash
+   curl http://WebServer-LB-12345678.us-east-1.elb.amazonaws.com
+   curl http://WebServer-LB-12345678.us-east-1.elb.amazonaws.com/health
+   ```  
+---
+## Troubleshooting Guide
+
+### 1. **VPC Creation Issues**
+- **Problem**: VPC creation fails or does not associate with subnets.
+  - **Solution**: Ensure that you are using valid CIDR blocks and the subnets are correctly mapped to the respective availability zones.
+  - **Check**: 
+    - CIDR block for the VPC is `10.0.0.0/16`.
+    - Subnets are within the range of the VPC's CIDR block.
+    - Availability Zones are available in the region you're working in (`us-east-1`).
+
+### 2. **Subnets Not Associating with Route Tables**
+- **Problem**: Subnets are not associating with the correct route tables.
+  - **Solution**: Double-check that you're assigning subnets to the correct route table (public or private).
+  - **Check**: 
+    - Public route table (RTB) has routes to the internet gateway (`0.0.0.0/0` → IGW).
+    - Private route table (RTB) has routes to the NAT gateway.
+
+### 3. **IAM Role Not Working for EC2 Instances**
+- **Problem**: EC2 instances cannot assume IAM roles (e.g., S3 access or SSM).
+  - **Solution**: Ensure that the IAM instance profile is attached to your EC2 instances, and the required permissions (e.g., `AmazonS3ReadOnlyAccess`, `AmazonSSMManagedInstanceCore`) are assigned to the role.
+  - **Check**:
+    - Go to the EC2 instance settings → IAM role → confirm the correct role is selected.
+    - Check the IAM role in the AWS console for necessary permissions.
+
+### 4. **No Internet Access in Private Subnets**
+- **Problem**: EC2 instances in private subnets cannot access the internet.
+  - **Solution**: Verify that NAT Gateways are created and the route table of the private subnets is correctly configured to use the NAT Gateway.
+  - **Check**:
+    - Ensure NAT Gateways have Elastic IPs associated.
+    - Verify private subnets have a route to NAT Gateway (`0.0.0.0/0` → NAT Gateway).
+
+### 5. **Security Group Configuration Issues**
+- **Problem**: Instances cannot communicate between layers (web → app → db) or from the internet to the web tier.
+  - **Solution**: Ensure that security groups allow the appropriate inbound and outbound traffic between tiers and from public sources.
+  - **Check**:
+    - **InternetFacing-lb-sg**: Allow HTTP traffic from `0.0.0.0/0`.
+    - **WebTier-SG**: Allow HTTP from `InternetFacing-lb-sg` and your IP.
+    - **AppTier-SG**: Allow TCP on port 4000 from `Internal-LB-SG` and your IP.
+    - **DB-SG**: Allow MySQL traffic from `AppTier-SG`.
+
+### 6. **EC2 Instances Not Connecting to RDS**
+- **Problem**: EC2 instances cannot connect to RDS databases.
+  - **Solution**: Check if the EC2 instance is in the right subnet with the correct security group that allows access to the database.
+  - **Check**:
+    - Ensure that the DB security group allows inbound connections on MySQL (port 3306) from `AppTier-SG`.
+    - Ensure that the EC2 instance and RDS instance are in the same VPC and the RDS instance is configured to allow connections from the EC2 instance.
+
+### 7. **S3 Bucket Permissions Issues**
+- **Problem**: EC2 instance or Lambda function cannot access the S3 bucket.
+  - **Solution**: Ensure that the IAM role attached to your EC2 instance has the correct permissions to access the S3 bucket.
+  - **Check**:
+    - The IAM role should include the `AmazonS3ReadOnlyAccess` or the specific `s3:GetObject` permission for the bucket.
+    - Double-check the S3 bucket policy to ensure that it's not restricting access.
+
+### 8. **AppServer or WebServer Not Starting Properly**
+- **Problem**: Application server or web server not starting or serving traffic.
+  - **Solution**: Ensure the server has the necessary environment setup (e.g., Node.js, PM2, NGINX) and is configured to run on the correct ports.
+  - **Check**:
+    - Run `pm2 status` to see if the application is running.
+    - Check `nginx.conf` to ensure the LoadBalancer DNS is configured correctly.
+    - Check NGINX logs with `sudo service nginx status` or `sudo journalctl -xe` for error messages.
+
+### 9. **Auto Scaling Group Not Scaling Instances**
+- **Problem**: Instances in the Auto Scaling Group do not scale up or down as expected.
+  - **Solution**: Verify that the Auto Scaling policies are set correctly, and check the health of the instances.
+  - **Check**:
+    - Go to the Auto Scaling Group settings and ensure that the minimum and maximum instance count is correctly configured.
+    - Check the target group health check settings (e.g., `/health` endpoint) and ensure instances are passing the health checks.
+    - If using custom scaling policies, ensure they are correctly configured to trigger based on metrics like CPU utilization.
+
+### 10. **Load Balancer Not Routing Traffic Properly**
+- **Problem**: Traffic is not routing properly through the Load Balancer (ALB).
+  - **Solution**: Ensure that the Load Balancer is correctly configured with the target groups and the right listener rules.
+  - **Check**:
+    - Ensure that the target group associated with the Load Balancer has instances registered and passing health checks.
+    - Double-check the Load Balancer’s DNS name and update any NGINX configuration if needed.
+    - Verify that security groups allow traffic from the Load Balancer and that routing is properly set for each layer (e.g., Web → App → DB).
+
+### 11. **Application Not Responding to HTTP Requests**
+- **Problem**: Application is not responding to HTTP requests or APIs.
+  - **Solution**: Verify the application server is running, and check the server logs for errors.
+  - **Check**:
+    - Ensure the EC2 instance has the necessary software installed and configured (e.g., Node.js, PM2).
+    - Run `pm2 logs` and `pm2 status` to check the application status.
+    - Verify that security groups allow inbound HTTP traffic.
+
+### 12. **Nginx Configuration Not Working with Load Balancer**
+- **Problem**: Nginx is not properly routing requests to the internal or web Load Balancer.
+  - **Solution**: Ensure the `nginx.conf` file is correctly configured with the Load Balancer’s DNS name and the required proxy pass configuration.
+  - **Check**:
+    - Ensure the `proxy_pass` directive points to the correct internal Load Balancer DNS name.
+    - Test the Nginx configuration with `sudo nginx -t` and restart Nginx with `sudo service nginx restart`.
 
 ---
 
-## Architecture Diagram
-Include an illustrative diagram showcasing the three-tier architecture, including the flow between Web, App, and Database tiers.
+By following these troubleshooting steps, you should be able to resolve most issues during the setup and operation of the three-tier architecture.
+
+
 
 ---
-
 ## Conclusion
 This README provides step-by-step guidance for deploying a secure, scalable, and reliable three-tier web architecture on AWS. Follow the instructions carefully to ensure a successful deployment.
 
