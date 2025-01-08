@@ -1,7 +1,7 @@
 # AWS-Three-Tier-Web-Architecture-Project
 
 ## Overview
-This project implements a highly scalable and secure three-tier web architecture on AWS. The architecture consists of a Web Tier, App Tier, and Database Tier, deployed using best practices for networking, security, and automation.
+This project implements a highly scalable, secure, and fault-tolerant three-tier web architecture on AWS. The architecture consists of the Web Tier, App Tier, and Database Tier, all deployed using best practices for networking, security, and automation. It ensures high availability, seamless scalability, and easy management, with optimized performance for each tier. The setup involves deploying and configuring resources for the database, application, and web layers, leveraging tools like **AWS**, **EC2**, **RDS**, **Elastic Load Balancer**, **Auto Scaling Groups**, **S3**, **VPC**, **Security Groups**, and **CloudWatch** to achieve these goals.
 
 ---
 
