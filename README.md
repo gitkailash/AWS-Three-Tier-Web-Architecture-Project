@@ -423,11 +423,6 @@ curl localhost:80
 - **Max:** 2
 ---
 
-Here are the troubleshooting steps for the entire process, written in a README format. You can add this section after your setup instructions.
-
----
-Here’s how you can write the testing step in a clear and concise manner:  
-
 ### Testing Step: Verify Web Server Load Balancer  
 
 1. Once the **WebTier-ASG** is created, locate the **Load Balancer DNS** from the AWS Management Console:  
