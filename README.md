@@ -27,7 +27,7 @@ This project implements a highly scalable, secure, and fault-tolerant three-tier
 ## Setup
 ### Step 1: Clone Repository
 ```bash
-git clone https://github.com/aws-samples/aws-three-tier-web-architecture-workshop.git
+git clone https://github.com/gitkailash/AWS-Three-Tier-Web-Architecture-Project.git
 ```
 
 ### Step 2: Create S3 Bucket
